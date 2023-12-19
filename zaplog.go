@@ -10,6 +10,10 @@ var (
 	DefaultLogger *zap.Logger
 )
 
+func GetDefaultLogger() *zap.Logger {
+	return DefaultLogger
+}
+
 func InitLogger(logPath string, level string) {
 	alevel := zap.NewAtomicLevel()
 
