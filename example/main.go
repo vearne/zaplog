@@ -1,9 +1,3 @@
-# zaplog
-
-Simple packaging for [zap](https://github.com/uber-go/zap)
-
-## Usage
-```
 package main
 
 import (
@@ -42,5 +36,3 @@ func main() {
 	// http://localhost:9090/metrics
 	http.ListenAndServe(":9090", nil)
 }
-
-```
