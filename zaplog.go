@@ -1,6 +1,7 @@
 package zaplog
 
 import (
+	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"gopkg.in/natefinch/lumberjack.v2"
@@ -52,21 +53,36 @@ func InitLogger(logPath string, level string) {
 }
 
 func Debug(msg string, fields ...zapcore.Field) {
+	logTotal.With(prometheus.Labels{
+		PromLabelLevel: "debug",
+	}).Inc()
 	DefaultLogger.Debug(msg, fields...)
 }
 
 func Info(msg string, fields ...zapcore.Field) {
+	logTotal.With(prometheus.Labels{
+		PromLabelLevel: "info",
+	}).Inc()
 	DefaultLogger.Info(msg, fields...)
 }
 
 func Warn(msg string, fields ...zapcore.Field) {
+	logTotal.With(prometheus.Labels{
+		PromLabelLevel: "warn",
+	}).Inc()
 	DefaultLogger.Warn(msg, fields...)
 }
 
 func Error(msg string, fields ...zapcore.Field) {
+	logTotal.With(prometheus.Labels{
+		PromLabelLevel: "error",
+	}).Inc()
 	DefaultLogger.Error(msg, fields...)
 }
 
 func Fatal(msg string, fields ...zapcore.Field) {
+	logTotal.With(prometheus.Labels{
+		PromLabelLevel: "fatal",
+	}).Inc()
 	DefaultLogger.Fatal(msg, fields...)
 }
