@@ -1,17 +1,19 @@
 package zaplog
 
 import (
+	"context"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/uptrace/opentelemetry-go-extra/otelzap"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"gopkg.in/natefinch/lumberjack.v2"
 )
 
 var (
-	DefaultLogger *zap.Logger
+	DefaultLogger *otelzap.Logger
 )
 
-func GetDefaultLogger() *zap.Logger {
+func GetDefaultLogger() *otelzap.Logger {
 	return DefaultLogger
 }
 
@@ -48,8 +50,48 @@ func InitLogger(logPath string, level string) {
 		alevel,
 	)
 
-	DefaultLogger = zap.New(core)
-	DefaultLogger = DefaultLogger.WithOptions(zap.AddCaller(), zap.AddCallerSkip(1))
+	logger := zap.New(core)
+	logger = logger.WithOptions(zap.AddCaller(), zap.AddCallerSkip(1))
+
+	DefaultLogger = otelzap.New(logger,
+		otelzap.WithTraceIDField(true),
+		otelzap.WithMinLevel(zap.DebugLevel),
+	)
+}
+
+func DebugContext(ctx context.Context, msg string, fields ...zapcore.Field) {
+	logTotal.With(prometheus.Labels{
+		PromLabelLevel: "debug",
+	}).Inc()
+	DefaultLogger.DebugContext(ctx, msg, fields...)
+}
+
+func InfoContext(ctx context.Context, msg string, fields ...zapcore.Field) {
+	logTotal.With(prometheus.Labels{
+		PromLabelLevel: "info",
+	}).Inc()
+	DefaultLogger.InfoContext(ctx, msg, fields...)
+}
+
+func WarnContext(ctx context.Context, msg string, fields ...zapcore.Field) {
+	logTotal.With(prometheus.Labels{
+		PromLabelLevel: "warn",
+	}).Inc()
+	DefaultLogger.WarnContext(ctx, msg, fields...)
+}
+
+func ErrorContext(ctx context.Context, msg string, fields ...zapcore.Field) {
+	logTotal.With(prometheus.Labels{
+		PromLabelLevel: "error",
+	}).Inc()
+	DefaultLogger.ErrorContext(ctx, msg, fields...)
+}
+
+func FatalContext(ctx context.Context, msg string, fields ...zapcore.Field) {
+	logTotal.With(prometheus.Labels{
+		PromLabelLevel: "fatal",
+	}).Inc()
+	DefaultLogger.FatalContext(ctx, msg, fields...)
 }
 
 func Debug(msg string, fields ...zapcore.Field) {
