@@ -56,6 +56,7 @@ func InitLogger(logPath string, level string) {
 	DefaultLogger = otelzap.New(logger,
 		otelzap.WithTraceIDField(true),
 		otelzap.WithMinLevel(zap.DebugLevel),
+		otelzap.WithCallerDepth(1),
 	)
 }
 
