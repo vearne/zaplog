@@ -34,6 +34,8 @@ func InitLogger(logPath string, level string) {
 		alevel.SetLevel(zap.DebugLevel)
 	case "info":
 		alevel.SetLevel(zap.InfoLevel)
+	case "warn":
+		alevel.SetLevel(zap.WarnLevel)
 	case "error":
 		alevel.SetLevel(zap.ErrorLevel)
 	default:
@@ -61,23 +63,29 @@ func InitLogger(logPath string, level string) {
 }
 
 func DebugContext(ctx context.Context, msg string, fields ...zapcore.Field) {
-	logTotal.With(prometheus.Labels{
-		PromLabelLevel: "debug",
-	}).Inc()
+	if DefaultLogger.Level() <= zap.DebugLevel {
+		logTotal.With(prometheus.Labels{
+			PromLabelLevel: "debug",
+		}).Inc()
+	}
 	DefaultLogger.DebugContext(ctx, msg, fields...)
 }
 
 func InfoContext(ctx context.Context, msg string, fields ...zapcore.Field) {
-	logTotal.With(prometheus.Labels{
-		PromLabelLevel: "info",
-	}).Inc()
+	if DefaultLogger.Level() <= zap.InfoLevel {
+		logTotal.With(prometheus.Labels{
+			PromLabelLevel: "info",
+		}).Inc()
+	}
 	DefaultLogger.InfoContext(ctx, msg, fields...)
 }
 
 func WarnContext(ctx context.Context, msg string, fields ...zapcore.Field) {
-	logTotal.With(prometheus.Labels{
-		PromLabelLevel: "warn",
-	}).Inc()
+	if DefaultLogger.Level() <= zap.WarnLevel {
+		logTotal.With(prometheus.Labels{
+			PromLabelLevel: "warn",
+		}).Inc()
+	}
 	DefaultLogger.WarnContext(ctx, msg, fields...)
 }
 
@@ -96,23 +104,29 @@ func FatalContext(ctx context.Context, msg string, fields ...zapcore.Field) {
 }
 
 func Debug(msg string, fields ...zapcore.Field) {
-	logTotal.With(prometheus.Labels{
-		PromLabelLevel: "debug",
-	}).Inc()
+	if DefaultLogger.Level() <= zap.DebugLevel {
+		logTotal.With(prometheus.Labels{
+			PromLabelLevel: "debug",
+		}).Inc()
+	}
 	DefaultLogger.Debug(msg, fields...)
 }
 
 func Info(msg string, fields ...zapcore.Field) {
-	logTotal.With(prometheus.Labels{
-		PromLabelLevel: "info",
-	}).Inc()
+	if DefaultLogger.Level() <= zap.InfoLevel {
+		logTotal.With(prometheus.Labels{
+			PromLabelLevel: "info",
+		}).Inc()
+	}
 	DefaultLogger.Info(msg, fields...)
 }
 
 func Warn(msg string, fields ...zapcore.Field) {
-	logTotal.With(prometheus.Labels{
-		PromLabelLevel: "warn",
-	}).Inc()
+	if DefaultLogger.Level() <= zap.WarnLevel {
+		logTotal.With(prometheus.Labels{
+			PromLabelLevel: "warn",
+		}).Inc()
+	}
 	DefaultLogger.Warn(msg, fields...)
 }
 
