@@ -13,7 +13,7 @@ import (
 var ops uint64
 
 func main() {
-	zlog.InitLogger("/tmp/otel.log", "debug")
+	zlog.InitLogger("/tmp/otel.log", "warn")
 	go func() {
 		for {
 			atomic.AddUint64(&ops, 1)
@@ -24,7 +24,7 @@ func main() {
 
 			zlog.Info("test info", zap.Uint64("ops", atomic.LoadUint64(&ops)))
 			zlog.Info("test info", zap.Uint64("ops", atomic.LoadUint64(&ops)))
-
+			zlog.Warn("test warn", zap.Uint64("ops", atomic.LoadUint64(&ops)))
 			zlog.Error("test error", zap.Uint64("ops", atomic.LoadUint64(&ops)))
 			time.Sleep(200 * time.Millisecond)
 		}
