@@ -62,6 +62,12 @@ func InitLogger(logPath string, level string) {
 	)
 }
 
+func Named(s string) *otelzap.Logger {
+	l := DefaultLogger.Clone()
+	l.Logger = l.Logger.Named(s)
+	return l
+}
+
 func DebugContext(ctx context.Context, msg string, fields ...zapcore.Field) {
 	if DefaultLogger.Level() <= zap.DebugLevel {
 		logTotal.With(prometheus.Labels{
