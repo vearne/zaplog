@@ -2,12 +2,16 @@ package zaplog
 
 import (
 	"context"
-	"github.com/prometheus/client_golang/prometheus"
 	"github.com/uptrace/opentelemetry-go-extra/otelzap"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/metric"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"gopkg.in/natefinch/lumberjack.v2"
+	"time"
 )
+
+const LabelLevel = "level"
 
 var (
 	DefaultLogger *otelzap.Logger
@@ -43,7 +47,7 @@ func InitLogger(logPath string, level string) {
 	}
 
 	encoderConfig := zap.NewProductionEncoderConfig()
-	encoderConfig.EncodeTime = zapcore.TimeEncoderOfLayout("2006-01-02 15:04:05")
+	encoderConfig.EncodeTime = zapcore.TimeEncoderOfLayout(time.DateTime)
 	encoderConfig.ConsoleSeparator = " | "
 
 	core := zapcore.NewCore(
@@ -70,82 +74,116 @@ func Named(s string) *otelzap.Logger {
 
 func DebugContext(ctx context.Context, msg string, fields ...zapcore.Field) {
 	if DefaultLogger.Level() <= zap.DebugLevel {
-		logTotal.With(prometheus.Labels{
-			PromLabelLevel: "debug",
-		}).Inc()
+		logTotal.Add(context.Background(),
+			1,
+			metric.WithAttributes(
+				attribute.String(LabelLevel, "debug"),
+			),
+		)
 	}
 	DefaultLogger.DebugContext(ctx, msg, fields...)
 }
 
 func InfoContext(ctx context.Context, msg string, fields ...zapcore.Field) {
 	if DefaultLogger.Level() <= zap.InfoLevel {
-		logTotal.With(prometheus.Labels{
-			PromLabelLevel: "info",
-		}).Inc()
+		logTotal.Add(context.Background(),
+			1,
+			metric.WithAttributes(
+				attribute.String(LabelLevel, "info"),
+			),
+		)
 	}
 	DefaultLogger.InfoContext(ctx, msg, fields...)
 }
 
 func WarnContext(ctx context.Context, msg string, fields ...zapcore.Field) {
 	if DefaultLogger.Level() <= zap.WarnLevel {
-		logTotal.With(prometheus.Labels{
-			PromLabelLevel: "warn",
-		}).Inc()
+		logTotal.Add(context.Background(),
+			1,
+			metric.WithAttributes(
+				attribute.String(LabelLevel, "warn"),
+			),
+		)
 	}
 	DefaultLogger.WarnContext(ctx, msg, fields...)
 }
 
 func ErrorContext(ctx context.Context, msg string, fields ...zapcore.Field) {
-	logTotal.With(prometheus.Labels{
-		PromLabelLevel: "error",
-	}).Inc()
+	if DefaultLogger.Level() <= zap.ErrorLevel {
+		logTotal.Add(context.Background(),
+			1,
+			metric.WithAttributes(
+				attribute.String(LabelLevel, "error"),
+			),
+		)
+	}
 	DefaultLogger.ErrorContext(ctx, msg, fields...)
 }
 
 func FatalContext(ctx context.Context, msg string, fields ...zapcore.Field) {
-	logTotal.With(prometheus.Labels{
-		PromLabelLevel: "fatal",
-	}).Inc()
+	logTotal.Add(context.Background(),
+		1,
+		metric.WithAttributes(
+			attribute.String(LabelLevel, "fatal"),
+		),
+	)
 	DefaultLogger.FatalContext(ctx, msg, fields...)
 }
 
 func Debug(msg string, fields ...zapcore.Field) {
 	if DefaultLogger.Level() <= zap.DebugLevel {
-		logTotal.With(prometheus.Labels{
-			PromLabelLevel: "debug",
-		}).Inc()
+		logTotal.Add(context.Background(),
+			1,
+			metric.WithAttributes(
+				attribute.String(LabelLevel, "debug"),
+			),
+		)
 	}
 	DefaultLogger.Debug(msg, fields...)
 }
 
 func Info(msg string, fields ...zapcore.Field) {
 	if DefaultLogger.Level() <= zap.InfoLevel {
-		logTotal.With(prometheus.Labels{
-			PromLabelLevel: "info",
-		}).Inc()
+		logTotal.Add(context.Background(),
+			1,
+			metric.WithAttributes(
+				attribute.String(LabelLevel, "info"),
+			),
+		)
 	}
 	DefaultLogger.Info(msg, fields...)
 }
 
 func Warn(msg string, fields ...zapcore.Field) {
 	if DefaultLogger.Level() <= zap.WarnLevel {
-		logTotal.With(prometheus.Labels{
-			PromLabelLevel: "warn",
-		}).Inc()
+		logTotal.Add(context.Background(),
+			1,
+			metric.WithAttributes(
+				attribute.String(LabelLevel, "warn"),
+			),
+		)
 	}
 	DefaultLogger.Warn(msg, fields...)
 }
 
 func Error(msg string, fields ...zapcore.Field) {
-	logTotal.With(prometheus.Labels{
-		PromLabelLevel: "error",
-	}).Inc()
+	if DefaultLogger.Level() <= zap.ErrorLevel {
+		logTotal.Add(context.Background(),
+			1,
+			metric.WithAttributes(
+				attribute.String(LabelLevel, "error"),
+			),
+		)
+	}
 	DefaultLogger.Error(msg, fields...)
 }
 
 func Fatal(msg string, fields ...zapcore.Field) {
-	logTotal.With(prometheus.Labels{
-		PromLabelLevel: "fatal",
-	}).Inc()
+	logTotal.Add(context.Background(),
+		1,
+		metric.WithAttributes(
+			attribute.String(LabelLevel, "fatal"),
+		),
+	)
 	DefaultLogger.Fatal(msg, fields...)
 }
