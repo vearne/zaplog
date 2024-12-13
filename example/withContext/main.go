@@ -12,7 +12,6 @@ import (
 	"go.uber.org/zap"
 	"net/http"
 	"sync/atomic"
-	"time"
 )
 
 var ops1 uint64
@@ -21,7 +20,9 @@ var ops2 uint64
 func main() {
 	InitMeterProvider()
 
-	zlog.InitLogger("/tmp/withContext.log", "debug")
+	zlog.InitLogger("/tmp/withContext.log", "debug", zlog.WithCompress(false),
+		zlog.WithMaxAge(3), zlog.WithMaxBackups(3), zlog.WithMaxSize(1))
+
 	go func() {
 		//logger1 := zlog.Named("worker1")
 		ctx := context.Background()
@@ -31,7 +32,7 @@ func main() {
 			zlog.InfoContext(ctx, "test info1", zap.Uint64("ops", atomic.LoadUint64(&ops1)))
 			zlog.WarnContext(ctx, "test warn1", zap.Uint64("ops", atomic.LoadUint64(&ops1)))
 			zlog.ErrorContext(ctx, "test error1", zap.Uint64("ops", atomic.LoadUint64(&ops1)))
-			time.Sleep(200 * time.Millisecond)
+			//time.Sleep(200 * time.Millisecond)
 		}
 
 	}()
@@ -44,7 +45,7 @@ func main() {
 			zlog.InfoContext(ctx, "test info2", zap.Uint64("ops", atomic.LoadUint64(&ops2)))
 			zlog.WarnContext(ctx, "test warn2", zap.Uint64("ops", atomic.LoadUint64(&ops2)))
 			zlog.ErrorContext(ctx, "test error2", zap.Uint64("ops", atomic.LoadUint64(&ops2)))
-			time.Sleep(200 * time.Millisecond)
+			//time.Sleep(200 * time.Millisecond)
 		}
 	}()
 

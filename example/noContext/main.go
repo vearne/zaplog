@@ -20,7 +20,8 @@ var ops2 uint64
 func main() {
 	InitMeterProvider()
 
-	zlog.InitLogger("/tmp/mylog.log", "warn")
+	zlog.InitLogger("/tmp/mylog.log", "warn", zlog.WithCompress(true),
+		zlog.WithMaxAge(3), zlog.WithMaxBackups(3), zlog.WithMaxSize(1))
 	go func() {
 		for {
 			atomic.AddUint64(&ops1, 1)
