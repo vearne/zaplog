@@ -21,16 +21,21 @@ func GetDefaultLogger() *otelzap.Logger {
 	return DefaultLogger
 }
 
-func InitLogger(logPath string, level string) {
+func InitLogger(logPath string, level string, opts ...Option) {
 	alevel := zap.NewAtomicLevel()
 
 	hook := lumberjack.Logger{
 		Filename:   logPath,
 		MaxSize:    1024, // megabytes
-		MaxBackups: 10,
-		MaxAge:     7,    //days
-		Compress:   true, // disabled by default
+		MaxBackups: 3,
+		MaxAge:     7,     //days
+		Compress:   false, // disabled by default
 	}
+
+	for _, opt := range opts {
+		opt(&hook)
+	}
+
 	w := zapcore.AddSync(&hook)
 
 	switch level {
