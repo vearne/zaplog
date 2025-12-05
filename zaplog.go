@@ -2,19 +2,22 @@ package zaplog
 
 import (
 	"context"
+	"time"
+
 	"github.com/uptrace/opentelemetry-go-extra/otelzap"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
+	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"gopkg.in/natefinch/lumberjack.v2"
-	"time"
 )
 
 const LabelLevel = "level"
 
 var (
 	DefaultLogger *otelzap.Logger
+	zapLogConfig  Config
 )
 
 func GetDefaultLogger() *otelzap.Logger {
@@ -24,19 +27,22 @@ func GetDefaultLogger() *otelzap.Logger {
 func InitLogger(logPath string, level string, opts ...Option) {
 	alevel := zap.NewAtomicLevel()
 
-	hook := lumberjack.Logger{
-		Filename:   logPath,
-		MaxSize:    1024, // megabytes
-		MaxBackups: 3,
-		MaxAge:     7,     //days
-		Compress:   false, // disabled by default
+	zapLogConfig = Config{
+		Logger: lumberjack.Logger{
+			Filename:   logPath,
+			MaxSize:    1024, // megabytes
+			MaxBackups: 3,
+			MaxAge:     7,     //days
+			Compress:   false, // disabled by default
+		},
+		WithTraceID: false,
 	}
 
 	for _, opt := range opts {
-		opt(&hook)
+		opt(&zapLogConfig)
 	}
 
-	w := zapcore.AddSync(&hook)
+	w := zapcore.AddSync(&zapLogConfig)
 
 	switch level {
 	case "debug":
@@ -70,6 +76,27 @@ func InitLogger(logPath string, level string, opts ...Option) {
 	)
 }
 
+func statistics(level zapcore.Level) {
+	if DefaultLogger.Level() >= level {
+		logTotal.Add(context.Background(),
+			1,
+			metric.WithAttributes(
+				attribute.String(LabelLevel, level.String()),
+			),
+		)
+	}
+}
+
+func tryAddFields(ctx context.Context, fields []zapcore.Field) []zapcore.Field {
+	if zapLogConfig.WithTraceID {
+		traceID := GetTraceID(ctx)
+		if len(traceID) > 0 {
+			fields = append(fields, zap.String("trace_id", traceID))
+		}
+	}
+	return fields
+}
+
 func Named(s string) *otelzap.Logger {
 	l := DefaultLogger.Clone()
 	l.Logger = l.Logger.Named(s)
@@ -77,117 +104,66 @@ func Named(s string) *otelzap.Logger {
 }
 
 func DebugContext(ctx context.Context, msg string, fields ...zapcore.Field) {
-	if DefaultLogger.Level() <= zap.DebugLevel {
-		logTotal.Add(context.Background(),
-			1,
-			metric.WithAttributes(
-				attribute.String(LabelLevel, "debug"),
-			),
-		)
-	}
+	statistics(zap.DebugLevel)
+	fields = tryAddFields(ctx, fields)
 	DefaultLogger.DebugContext(ctx, msg, fields...)
 }
 
 func InfoContext(ctx context.Context, msg string, fields ...zapcore.Field) {
-	if DefaultLogger.Level() <= zap.InfoLevel {
-		logTotal.Add(context.Background(),
-			1,
-			metric.WithAttributes(
-				attribute.String(LabelLevel, "info"),
-			),
-		)
-	}
+	statistics(zap.InfoLevel)
+	fields = tryAddFields(ctx, fields)
 	DefaultLogger.InfoContext(ctx, msg, fields...)
 }
 
 func WarnContext(ctx context.Context, msg string, fields ...zapcore.Field) {
-	if DefaultLogger.Level() <= zap.WarnLevel {
-		logTotal.Add(context.Background(),
-			1,
-			metric.WithAttributes(
-				attribute.String(LabelLevel, "warn"),
-			),
-		)
-	}
+	statistics(zap.WarnLevel)
+	fields = tryAddFields(ctx, fields)
 	DefaultLogger.WarnContext(ctx, msg, fields...)
 }
 
 func ErrorContext(ctx context.Context, msg string, fields ...zapcore.Field) {
-	if DefaultLogger.Level() <= zap.ErrorLevel {
-		logTotal.Add(context.Background(),
-			1,
-			metric.WithAttributes(
-				attribute.String(LabelLevel, "error"),
-			),
-		)
-	}
+	statistics(zap.ErrorLevel)
+	fields = tryAddFields(ctx, fields)
 	DefaultLogger.ErrorContext(ctx, msg, fields...)
 }
 
 func FatalContext(ctx context.Context, msg string, fields ...zapcore.Field) {
-	logTotal.Add(context.Background(),
-		1,
-		metric.WithAttributes(
-			attribute.String(LabelLevel, "fatal"),
-		),
-	)
+	statistics(zap.FatalLevel)
+	fields = tryAddFields(ctx, fields)
 	DefaultLogger.FatalContext(ctx, msg, fields...)
 }
 
 func Debug(msg string, fields ...zapcore.Field) {
-	if DefaultLogger.Level() <= zap.DebugLevel {
-		logTotal.Add(context.Background(),
-			1,
-			metric.WithAttributes(
-				attribute.String(LabelLevel, "debug"),
-			),
-		)
-	}
+	statistics(zap.DebugLevel)
 	DefaultLogger.Debug(msg, fields...)
 }
 
 func Info(msg string, fields ...zapcore.Field) {
-	if DefaultLogger.Level() <= zap.InfoLevel {
-		logTotal.Add(context.Background(),
-			1,
-			metric.WithAttributes(
-				attribute.String(LabelLevel, "info"),
-			),
-		)
-	}
+	statistics(zap.InfoLevel)
 	DefaultLogger.Info(msg, fields...)
 }
 
 func Warn(msg string, fields ...zapcore.Field) {
-	if DefaultLogger.Level() <= zap.WarnLevel {
-		logTotal.Add(context.Background(),
-			1,
-			metric.WithAttributes(
-				attribute.String(LabelLevel, "warn"),
-			),
-		)
-	}
+	statistics(zap.WarnLevel)
 	DefaultLogger.Warn(msg, fields...)
 }
 
 func Error(msg string, fields ...zapcore.Field) {
-	if DefaultLogger.Level() <= zap.ErrorLevel {
-		logTotal.Add(context.Background(),
-			1,
-			metric.WithAttributes(
-				attribute.String(LabelLevel, "error"),
-			),
-		)
-	}
+	statistics(zap.ErrorLevel)
 	DefaultLogger.Error(msg, fields...)
 }
 
 func Fatal(msg string, fields ...zapcore.Field) {
-	logTotal.Add(context.Background(),
-		1,
-		metric.WithAttributes(
-			attribute.String(LabelLevel, "fatal"),
-		),
-	)
+	statistics(zap.FatalLevel)
 	DefaultLogger.Fatal(msg, fields...)
+}
+
+// GetTraceID returns the 32-character lowercase hexadecimal string of the TraceID from the current context.
+// Returns an empty string if there is no Span in the ctx.
+func GetTraceID(ctx context.Context) string {
+	span := trace.SpanFromContext(ctx)
+	if !span.SpanContext().IsValid() {
+		return ""
+	}
+	return span.SpanContext().TraceID().String()
 }
