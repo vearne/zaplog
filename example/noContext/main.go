@@ -2,6 +2,10 @@ package main
 
 import (
 	"fmt"
+	"net/http"
+	"sync/atomic"
+	"time"
+
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	zlog "github.com/vearne/zaplog"
@@ -9,9 +13,6 @@ import (
 	otelProm "go.opentelemetry.io/otel/exporters/prometheus"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	"go.uber.org/zap"
-	"net/http"
-	"sync/atomic"
-	"time"
 )
 
 var ops1 uint64

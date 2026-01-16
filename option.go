@@ -4,8 +4,10 @@ import "gopkg.in/natefinch/lumberjack.v2"
 
 type Config struct {
 	lumberjack.Logger
-	WithTraceID bool
+	WithTraceID    bool
+	WithAutoEvents bool
 }
+
 type Option func(c *Config)
 
 // megabytes
@@ -38,5 +40,13 @@ func WithCompress(compress bool) Option {
 func WithTraceID(on bool) Option {
 	return func(c *Config) {
 		c.WithTraceID = on
+	}
+}
+
+// WithAutoEvents configures the logger to automatically add log messages as events to active spans.
+// When enabled, each log call will add an event to the current span with the log level and message.
+func WithAutoEvents(enable bool) Option {
+	return func(c *Config) {
+		c.WithAutoEvents = enable
 	}
 }
