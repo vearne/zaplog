@@ -15,8 +15,11 @@ go test ./...
 go test -v ./path/to/file_test.go -run TestFunctionName
 
 # Run examples
-go run example/withContext/main.go
-go run example/noContext/main.go
+go run ./example/basic
+go run ./example/file
+go run ./example/teeJSON
+go run ./example/withContext
+go run ./example/noContext
 
 # Lint
 go vet ./...
@@ -75,6 +78,14 @@ func DebugContext(ctx context.Context, msg string, fields ...zapcore.Field)
 func Debug(msg string, fields ...zapcore.Field)
 ```
 
+`InitLogger` takes only options (all optional):
+```go
+func InitLogger(opts ...Option) error
+// defaults: level=info, output=stdout
+```
+
+`Named()` returns `*otelzap.Logger` and bypasses package-level statistics / trace_id / auto events — document this in GoDoc; do not wrap it.
+
 ### OpenTelemetry Integration
 - Use `otelzap.Logger` for tracing-aware logging
 - Initialize metrics in `init()` function: `otel.GetMeterProvider().Meter("zaplog")`
@@ -88,8 +99,9 @@ func Debug(msg string, fields ...zapcore.Field)
 ### GoDoc Comments
 Exported functions must have GoDoc comments:
 ```go
-// InitLogger initializes the default logger with the specified configuration.
-func InitLogger(logPath string, level string, opts ...Option)
+// InitLogger initializes the default logger.
+// Defaults: level=info, output=stdout. Returns an error on invalid config.
+func InitLogger(opts ...Option) error
 ```
 
 ### Constants & Globals
@@ -112,12 +124,24 @@ var (
 ```
 zaplog/
 ├── zaplog.go           # Main package exports, logging functions
-├── option.go           # Functional options for configuration
+├── option.go           # Functional options for InitLogger
 ├── otel_metrics.go     # OpenTelemetry metrics initialization
-├── example/            # Usage examples
-│   ├── withContext/main.go
-│   └── noContext/main.go
-└── go.mod              # Go module definition (Go 1.24)
+├── example/            # Usage examples (see example/README.md)
+│   ├── basic/          # defaults, SetLevel, Sync, Named
+│   ├── file/           # WithFile + rotation
+│   ├── teeJSON/        # file + stdout + JSON
+│   ├── noContext/      # metrics demo
+│   └── withContext/    # trace_id / auto events demo
+└── go.mod
+```
+
+## Run examples
+```bash
+go run ./example/basic
+go run ./example/file
+go run ./example/teeJSON
+go run ./example/noContext
+go run ./example/withContext
 ```
 
 ## Key Dependencies

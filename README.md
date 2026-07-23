@@ -1,78 +1,89 @@
 # zaplog
 
-Simple packaging for [zap](https://github.com/uber-go/zap)
+Simple packaging for [zap](https://github.com/uber-go/zap) with OpenTelemetry hooks.
 
-## Usage
+## Install
+
+```bash
+go get github.com/vearne/zaplog
 ```
+
+## Init
+
+```go
+// defaults: level=info, output=stdout
+zlog.InitLogger()
+
+// file only
+zlog.InitLogger(zlog.WithFile("/var/log/app.log"), zlog.WithLevel("debug"))
+
+// file + stdout, JSON (typical container setup)
+zlog.InitLogger(
+    zlog.WithFile("/var/log/app.log"),
+    zlog.WithStdout(),
+    zlog.WithJSON(),
+    zlog.WithLevel("info"),
+)
+
+defer zlog.Sync()
+```
+
+### Options
+
+| Option | Meaning |
+|--------|---------|
+| `WithLevel(string)` | debug / info / warn / error (default info) |
+| `WithFile(path)` | lumberjack file output |
+| `WithStdout()` / `WithStderr()` | std sinks |
+| `WithJSON()` | JSON encoder instead of console |
+| `WithCallerSkip(n)` | extra caller frames to skip (default 1) |
+| `WithTraceID` / `WithAutoEvents` | OTEL helpers |
+| `WithMaxSize` / `WithMaxAge` / `WithMaxBackups` / `WithCompress` | rotation |
+
+**Output rule:** if no output option is set, **stdout** is used. Once any of
+`WithFile` / `WithStdout` / `WithStderr` is set, only those sinks are enabled.
+
+### Runtime
+
+```go
+zlog.SetLevel("debug")
+_ = zlog.Sync() // flush before exit
+```
+
+### Named
+
+`Named()` returns `*otelzap.Logger` and **bypasses** package helpers
+(`statistics` / `trace_id` / auto span events). Use package-level
+`Info` / `InfoContext` when you need those.
+
+## Examples
+
+Runnable demos live under [`example/`](./example). See [`example/README.md`](./example/README.md).
+
+```bash
+go run ./example/basic
+go run ./example/file
+go run ./example/teeJSON
+go run ./example/noContext      # + Prometheus on :9090
+go run ./example/withContext   # + trace_id / span events
+```
+
+## Minimal snippet
+
+```go
 package main
 
 import (
-	"context"
-	"fmt"
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 	zlog "github.com/vearne/zaplog"
-	"go.opentelemetry.io/otel"
-	otelProm "go.opentelemetry.io/otel/exporters/prometheus"
-	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	"go.uber.org/zap"
-	"net/http"
-	"sync/atomic"
-	"time"
 )
 
-var ops1 uint64
-var ops2 uint64
-
 func main() {
-	InitMeterProvider()
-
-	zlog.InitLogger("/tmp/withContext.log", "debug")
-	go func() {
-		//logger1 := zlog.Named("worker1")
-		ctx := context.Background()
-		for {
-			atomic.AddUint64(&ops1, 1)
-
-			zlog.InfoContext(ctx, "test info1", zap.Uint64("ops", atomic.LoadUint64(&ops1)))
-			zlog.WarnContext(ctx, "test warn1", zap.Uint64("ops", atomic.LoadUint64(&ops1)))
-			zlog.ErrorContext(ctx, "test error1", zap.Uint64("ops", atomic.LoadUint64(&ops1)))
-			time.Sleep(200 * time.Millisecond)
-		}
-
-	}()
-	go func() {
-		//logger2 := zlog.Named("worker2")
-		ctx := context.Background()
-		for {
-			atomic.AddUint64(&ops2, 1)
-
-			zlog.InfoContext(ctx, "test info2", zap.Uint64("ops", atomic.LoadUint64(&ops2)))
-			zlog.WarnContext(ctx, "test warn2", zap.Uint64("ops", atomic.LoadUint64(&ops2)))
-			zlog.ErrorContext(ctx, "test error2", zap.Uint64("ops", atomic.LoadUint64(&ops2)))
-			time.Sleep(200 * time.Millisecond)
-		}
-	}()
-
-	http.Handle("/metrics", promhttp.Handler())
-	fmt.Println("starting...")
-	// http://localhost:9090/metrics
-	http.ListenAndServe(":9090", nil)
-}
-
-func InitMeterProvider() *sdkmetric.MeterProvider {
-	promExporter, err := otelProm.New(otelProm.WithNamespace("otel-metrics"),
-		otelProm.WithRegisterer(prometheus.DefaultRegisterer),
-	)
-	if err != nil {
+	if err := zlog.InitLogger(); err != nil {
 		panic(err)
 	}
-	mp := sdkmetric.NewMeterProvider(
-		sdkmetric.WithReader(promExporter),
-		//sdkmetric.WithResource(initResource()),
-	)
-	otel.SetMeterProvider(mp)
+	defer zlog.Sync()
 
-	return mp
+	zlog.Info("hello", zap.String("from", "zaplog"))
 }
 ```
