@@ -4,6 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/uptrace/opentelemetry-go-extra/otelzap"
@@ -18,70 +21,164 @@ import (
 const LabelLevel = "level"
 
 var (
-	DefaultLogger *otelzap.Logger
+	// DefaultLogger is never nil: before InitLogger it discards all logs (zap.NewNop).
+	DefaultLogger = otelzap.New(zap.NewNop())
 	zapLogConfig  Config
+	atomicLevel   zap.AtomicLevel
 )
 
 func GetDefaultLogger() *otelzap.Logger {
 	return DefaultLogger
 }
 
-func InitLogger(logPath string, level string, opts ...Option) {
-	alevel := zap.NewAtomicLevel()
-
+// InitLogger initializes the default logger.
+//
+// Defaults when called with no options:
+//   - level: info
+//   - output: stdout
+//
+// Examples:
+//
+//	InitLogger()
+//	InitLogger(WithFile("/var/log/app.log"))
+//	InitLogger(WithFile(path), WithStdout(), WithLevel("debug"), WithJSON())
+func InitLogger(opts ...Option) error {
 	zapLogConfig = Config{
 		Logger: lumberjack.Logger{
-			Filename:   logPath,
 			MaxSize:    1024, // megabytes
 			MaxBackups: 3,
-			MaxAge:     7,     //days
-			Compress:   false, // disabled by default
+			MaxAge:     7, // days
+			Compress:   false,
 		},
 		WithTraceID:    false,
 		WithAutoEvents: true,
+		CallerSkip:     1,
+		Level:          "info",
 	}
 
 	for _, opt := range opts {
 		opt(&zapLogConfig)
 	}
 
-	w := zapcore.AddSync(&zapLogConfig)
+	if !zapLogConfig.outputSet {
+		zapLogConfig.AlsoStdout = true
+	}
 
-	switch level {
-	case "debug":
-		alevel.SetLevel(zap.DebugLevel)
-	case "info":
-		alevel.SetLevel(zap.InfoLevel)
-	case "warn":
-		alevel.SetLevel(zap.WarnLevel)
-	case "error":
-		alevel.SetLevel(zap.ErrorLevel)
-	default:
-		alevel.SetLevel(zap.InfoLevel)
+	if zapLogConfig.FilePath != "" {
+		if err := ensureLogDir(zapLogConfig.FilePath); err != nil {
+			return err
+		}
+		zapLogConfig.Filename = zapLogConfig.FilePath
+	}
+
+	if zapLogConfig.FilePath == "" && !zapLogConfig.AlsoStdout && !zapLogConfig.AlsoStderr {
+		return fmt.Errorf("zaplog: no output configured")
+	}
+
+	atomicLevel = zap.NewAtomicLevel()
+	if err := applyLevel(zapLogConfig.Level); err != nil {
+		return err
+	}
+
+	callerSkip := zapLogConfig.CallerSkip
+	if callerSkip < 0 {
+		callerSkip = 0
 	}
 
 	encoderConfig := zap.NewProductionEncoderConfig()
 	encoderConfig.EncodeTime = zapcore.TimeEncoderOfLayout(time.DateTime)
 	encoderConfig.ConsoleSeparator = " | "
 
-	core := zapcore.NewCore(
-		zapcore.NewConsoleEncoder(encoderConfig),
-		w,
-		alevel,
-	)
+	var encoder zapcore.Encoder
+	if zapLogConfig.JSON {
+		encoder = zapcore.NewJSONEncoder(encoderConfig)
+	} else {
+		encoder = zapcore.NewConsoleEncoder(encoderConfig)
+	}
 
-	logger := zap.New(core)
-	logger = logger.WithOptions(zap.AddCaller(), zap.AddCallerSkip(1))
+	var cores []zapcore.Core
+	if zapLogConfig.FilePath != "" {
+		cores = append(cores, zapcore.NewCore(encoder.Clone(), zapcore.AddSync(&zapLogConfig), atomicLevel))
+	}
+	if zapLogConfig.AlsoStdout {
+		cores = append(cores, zapcore.NewCore(encoder.Clone(), zapcore.AddSync(os.Stdout), atomicLevel))
+	}
+	if zapLogConfig.AlsoStderr {
+		cores = append(cores, zapcore.NewCore(encoder.Clone(), zapcore.AddSync(os.Stderr), atomicLevel))
+	}
+
+	logger := zap.New(zapcore.NewTee(cores...))
+	logger = logger.WithOptions(zap.AddCaller(), zap.AddCallerSkip(callerSkip))
 
 	DefaultLogger = otelzap.New(logger,
 		otelzap.WithMinLevel(zap.DebugLevel),
-		otelzap.WithCallerDepth(1),
-		otelzap.WithErrorStatusLevel(zap.ErrorLevel), // Error 日志设置 span 状态为 Error
+		otelzap.WithCallerDepth(callerSkip),
+		otelzap.WithErrorStatusLevel(zap.ErrorLevel),
 	)
+	return nil
+}
+
+// SetLevel changes the minimum log level at runtime.
+// Supported: debug, info, warn, error. Must be called after InitLogger.
+func SetLevel(level string) error {
+	return applyLevel(level)
+}
+
+// Level returns the current minimum log level.
+func Level() zapcore.Level {
+	return atomicLevel.Level()
+}
+
+// AtomicLevel returns the underlying zap.AtomicLevel for advanced use.
+func AtomicLevel() zap.AtomicLevel {
+	return atomicLevel
+}
+
+// Sync flushes any buffered log entries. Call before process exit.
+func Sync() error {
+	return DefaultLogger.Sync()
+}
+
+func applyLevel(level string) error {
+	switch strings.ToLower(strings.TrimSpace(level)) {
+	case "", "info":
+		atomicLevel.SetLevel(zap.InfoLevel)
+	case "debug":
+		atomicLevel.SetLevel(zap.DebugLevel)
+	case "warn", "warning":
+		atomicLevel.SetLevel(zap.WarnLevel)
+	case "error":
+		atomicLevel.SetLevel(zap.ErrorLevel)
+	default:
+		return fmt.Errorf("zaplog: unknown level %q", level)
+	}
+	return nil
+}
+
+// ensureLogDir validates logPath and creates its parent directory when missing.
+func ensureLogDir(logPath string) error {
+	if strings.TrimSpace(logPath) == "" {
+		return fmt.Errorf("zaplog: log path is empty")
+	}
+	dir := filepath.Dir(logPath)
+	fi, err := os.Stat(dir)
+	if err == nil {
+		if !fi.IsDir() {
+			return fmt.Errorf("zaplog: log path parent is not a directory: %s", dir)
+		}
+		return nil
+	}
+	if !os.IsNotExist(err) {
+		return fmt.Errorf("zaplog: stat log dir: %w", err)
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return fmt.Errorf("zaplog: create log dir: %w", err)
+	}
+	return nil
 }
 
 func statistics(level zapcore.Level) {
-	if DefaultLogger.Level() >= level {
+	if DefaultLogger.Core().Enabled(level) {
 		logTotal.Add(context.Background(),
 			1,
 			metric.WithAttributes(
@@ -101,6 +198,11 @@ func tryAddFields(ctx context.Context, fields []zapcore.Field) []zapcore.Field {
 	return fields
 }
 
+// Named returns a child logger with the given name.
+//
+// Logs written through the returned *otelzap.Logger bypass zaplog package
+// helpers: they do NOT go through statistics / trace_id injection / auto span
+// events. Use package-level Info/InfoContext/... when you need those features.
 func Named(s string) *otelzap.Logger {
 	l := DefaultLogger.Clone()
 	l.Logger = l.Logger.Named(s)
@@ -137,6 +239,7 @@ func zapFieldsToAttributes(fields []zapcore.Field) []attribute.KeyValue {
 	}
 	return attrs
 }
+
 func addEventIfEnabled(ctx context.Context, level, msg string, fields ...zapcore.Field) {
 	if zapLogConfig.WithAutoEvents {
 		span := trace.SpanFromContext(ctx)
